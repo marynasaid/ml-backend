@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
-# ✅ CORS (правильная версия для Flutter Web)
+# ✅ CORS ДОЛЖЕН БЫТЬ СРАЗУ ПОСЛЕ app
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -38,17 +38,21 @@ def root():
 @app.post("/predict")
 def predict(data: InputData):
 
-    x = np.array([[
-        data.is_flow,
-        data.is_first_flow,
-        data.last_cycle_length,
-        data.cycle_progress,
-        data.is_last_flow,
-        data.flow_length,
-        data.cycle_length_deviation,
-        data.avg_cycle_length
-    ]])
+    try:
+        x = np.array([[
+            data.is_flow,
+            data.is_first_flow,
+            data.last_cycle_length,
+            data.cycle_progress,
+            data.is_last_flow,
+            data.flow_length,
+            data.cycle_length_deviation,
+            data.avg_cycle_length
+        ]])
 
-    pred = model.predict(x)[0]
+        pred = model.predict(x)[0]
 
-    return {"prediction": float(pred)}
+        return {"prediction": float(pred)}
+
+    except Exception as e:
+        return {"error": str(e)}
