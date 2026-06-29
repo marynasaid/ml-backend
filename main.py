@@ -4,9 +4,11 @@ import joblib
 import numpy as np
 from fastapi.middleware.cors import CORSMiddleware
 from catboost import CatBoostClassifier
+from ai_service import router as ai_router
 
 app = FastAPI()
 
+app.include_router(ai_router)
 # CORS
 app.add_middleware(
     CORSMiddleware,
