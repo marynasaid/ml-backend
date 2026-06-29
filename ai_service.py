@@ -1,16 +1,13 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
-from openai import OpenAI
+from groq import Groq
 import os
 
 router = APIRouter()
 
 
-# 🔥 DEBUG: проверка ключа на Render
-print("OPENAI KEY LOADED:", os.getenv("OPENAI_API_KEY") is not None)
-
-
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# 🔥 Groq client
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 
 class AIRequest(BaseModel):
@@ -37,10 +34,16 @@ Give:
 """
 
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="llama3-8b-8192",
             messages=[
-                {"role": "system", "content": "You are a helpful cycle health assistant."},
-                {"role": "user", "content": prompt}
+                {
+                    "role": "system",
+                    "content": "You are a helpful cycle health assistant."
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
             ]
         )
 
@@ -49,7 +52,6 @@ Give:
         }
 
     except Exception as e:
-        print("AI ERROR:", str(e))
         return {
             "error": "AI failed",
             "detail": str(e)
