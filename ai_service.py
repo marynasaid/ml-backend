@@ -5,8 +5,7 @@ import os
 
 router = APIRouter()
 
-
-# 🔥 Groq client
+# ✅ SAFE INIT
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 
@@ -34,7 +33,7 @@ Give:
 """
 
         response = client.chat.completions.create(
-            model="llama-3.1-70b-versatile",
+            model="llama-3.1-8b-instant",
             messages=[
                 {
                     "role": "system",
