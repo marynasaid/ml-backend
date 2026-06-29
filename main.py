@@ -26,7 +26,7 @@ phase_model.load_model("cycle_phase_model.cbm")  # phases model
 
 
 # ─────────────────────────────
-# INPUT (next period)
+# INPUT MODEL
 # ─────────────────────────────
 class InputData(BaseModel):
     is_flow: int
@@ -70,7 +70,7 @@ def predict(data: InputData):
 
 
 # ─────────────────────────────
-# PHASE PROBABILITIES (НОВОЕ)
+# PHASE PROBABILITIES (SAFE VERSION)
 # ─────────────────────────────
 @app.post("/predict_phases")
 def predict_phases(data: InputData):
@@ -88,8 +88,7 @@ def predict_phases(data: InputData):
 
     proba = phase_model.predict_proba(x)[0]
 
+    # 🔥 ВАЖНО: НЕ ДЕЛАЕМ ПРЕДПОЛОЖЕНИЯ О ПОРЯДКЕ КЛАССОВ
     return {
-        "follicular": float(proba[0]),
-        "fertility": float(proba[1]),
-        "luteal": float(proba[2])
+        "raw": [float(p) for p in proba]
     }
