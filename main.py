@@ -3,10 +3,11 @@ from pydantic import BaseModel
 import joblib
 import numpy as np
 from fastapi.middleware.cors import CORSMiddleware
+from catboost import CatBoostClassifier
 
 app = FastAPI()
 
-# ✅ CORS ДОЛЖЕН БЫТЬ СРАЗУ ПОСЛЕ app
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -15,10 +16,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# загрузка модели
-model = joblib.load("catboost_model.pkl")
+# ─────────────────────────────
+# LOAD MODELS
+# ─────────────────────────────
+model = joblib.load("catboost_model.pkl")  # next period
+
+phase_model = CatBoostClassifier()
+phase_model.load_model("cycle_phase_model.cbm")  # phases model
 
 
+# ─────────────────────────────
+# INPUT (next period)
+# ─────────────────────────────
 class InputData(BaseModel):
     is_flow: int
     is_first_flow: int
@@ -30,29 +39,57 @@ class InputData(BaseModel):
     avg_cycle_length: float
 
 
+# ─────────────────────────────
+# ROOT
+# ─────────────────────────────
 @app.get("/")
 def root():
     return {"status": "ok"}
 
 
+# ─────────────────────────────
+# NEXT PERIOD
+# ─────────────────────────────
 @app.post("/predict")
 def predict(data: InputData):
 
-    try:
-        x = np.array([[
-            data.is_flow,
-            data.is_first_flow,
-            data.last_cycle_length,
-            data.cycle_progress,
-            data.is_last_flow,
-            data.flow_length,
-            data.cycle_length_deviation,
-            data.avg_cycle_length
-        ]])
+    x = np.array([[
+        data.is_flow,
+        data.is_first_flow,
+        data.last_cycle_length,
+        data.cycle_progress,
+        data.is_last_flow,
+        data.flow_length,
+        data.cycle_length_deviation,
+        data.avg_cycle_length
+    ]])
 
-        pred = model.predict(x)[0]
+    pred = model.predict(x)[0]
 
-        return {"prediction": float(pred)}
+    return {"prediction": float(pred)}
 
-    except Exception as e:
-        return {"error": str(e)}
+
+# ─────────────────────────────
+# PHASE PROBABILITIES (НОВОЕ)
+# ─────────────────────────────
+@app.post("/predict_phases")
+def predict_phases(data: InputData):
+
+    x = np.array([[
+        data.is_flow,
+        data.is_first_flow,
+        data.last_cycle_length,
+        data.cycle_progress,
+        data.is_last_flow,
+        data.flow_length,
+        data.cycle_length_deviation,
+        data.avg_cycle_length
+    ]])
+
+    proba = phase_model.predict_proba(x)[0]
+
+    return {
+        "follicular": float(proba[0]),
+        "fertility": float(proba[1]),
+        "luteal": float(proba[2])
+    }
