@@ -6,11 +6,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from catboost import CatBoostClassifier
 from ai_service import router as ai_router
 
-
 app = FastAPI()
 
 app.include_router(ai_router)
+
+# ─────────────────────────────
 # CORS
+# ─────────────────────────────
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -23,7 +26,7 @@ app.add_middleware(
 # LOAD MODELS
 # ─────────────────────────────
 
-model = joblib.load("catboost_model.pkl")  # next period
+model = joblib.load("catboost_model.pkl")
 
 fert_model = CatBoostClassifier()
 fert_model.load_model("fertility_binary.cbm")
@@ -36,7 +39,6 @@ lut_model.load_model("luteal_binary.cbm")
 
 final_model = CatBoostClassifier()
 final_model.load_model("cycle_phase_model.cbm")
-
 
 # ─────────────────────────────
 # INPUT MODEL
@@ -52,7 +54,6 @@ class InputData(BaseModel):
     avg_cycle_length: float
     cycle_length_deviation: float
 
-
 # ─────────────────────────────
 # ROOT
 # ─────────────────────────────
@@ -60,7 +61,6 @@ class InputData(BaseModel):
 @app.get("/")
 def root():
     return {"status": "ok"}
-
 
 # ─────────────────────────────
 # NEXT PERIOD
@@ -84,13 +84,22 @@ def predict(data: InputData):
 
     return {"prediction": float(pred)}
 
-
 # ─────────────────────────────
-# PHASE PREDICTION (FIXED PIPELINE)
+# PHASE PREDICTION
 # ─────────────────────────────
 
 @app.post("/predict_phases")
 def predict_phases(data: InputData):
+
+    # 🔥 DEBUG BLOCK (IMPORTANT)
+    print("======================================")
+    print("RAW is_flow:", data.is_flow)
+    print("TYPE is_flow:", type(data.is_flow))
+    print("======================================")
+
+    is_flow_flag = int(data.is_flow) == 1
+    print("NORMALIZED is_flow_flag:", is_flow_flag)
+    print("======================================")
 
     x = np.array([[
         data.is_flow,
@@ -103,12 +112,23 @@ def predict_phases(data: InputData):
         data.cycle_length_deviation
     ]])
 
-    # binary models
+    # ─────────────────────────
+     # FLOW OVERRIDE
+    if int(data.is_flow) == 1:
+        return {
+            "menstrual": 1.0,
+            "follicular": 0.0,
+            "fertility": 0.0,
+            "luteal": 0.0
+        }
+    # ─────────────────────────
+    # BASE MODELS
+    # ─────────────────────────
+
     p_fertility = fert_model.predict_proba(x)[0][1]
     p_follicular = fol_model.predict_proba(x)[0][1]
     p_luteal = lut_model.predict_proba(x)[0][1]
 
-    # final stacked model
     x_final = np.array([[
         *x[0],
         p_fertility,
@@ -119,6 +139,7 @@ def predict_phases(data: InputData):
     proba = final_model.predict_proba(x_final)[0]
 
     return {
+        "menstrual": 0.0,
         "follicular": float(proba[0]),
         "fertility": float(proba[1]),
         "luteal": float(proba[2])
