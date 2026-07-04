@@ -23,93 +23,61 @@ def ai_daily_insight(data: AIRequest):
         # =========================
         snapshots = cycle.get("snapshots", [])
 
-        if not snapshots:
-            return {
-                "insight": "Недостаточно данных для анализа."
-            }
+        latest = snapshots[-1] if snapshots else None
+        history = snapshots[:-1] if len(snapshots) > 1 else []
 
-        # последний = текущий прогноз
-        latest = snapshots[-1]
+        latest_text = (
+            f"id={latest.get('id')} | phase={latest.get('phase_of_day')} | axes={latest.get('axes', {})}"
+            if latest else "no data"
+        )
 
-        # история
-        history = snapshots[:-1]
-
-        # формат истории (ограничиваем)
         history_text = "\n".join([
             f"{s.get('id')} | phase={s.get('phase_of_day')} | axes={s.get('axes', {})}"
             for s in history[-20:]
         ])
 
-        latest_text = (
-            f"id={latest.get('id')} | phase={latest.get('phase_of_day')} | axes={latest.get('axes', {})}"
-        )
-
+        # =========================
+        # PROMPT
+        # =========================
         prompt = f"""
-Ты — женская покровительница и аналитик состояния цикла.
+Ты — женская покровительница и мягкий аналитик состояния цикла.
 
-Ты не врач.
-Ты даёшь мягкий, тёплый, но точный daily forecast.
-
----
-
-ВАЖНАЯ ЛОГИКА ДАННЫХ:
-
-- LATEST SNAPSHOT = текущее состояние и прогноз на сегодня
-- SNAPSHOT HISTORY = прошлые прогнозы и динамика фаз
-- AXES = симптомы (0..1), отражают физическое и эмоциональное состояние
-
-AXES ПРИМЕР:
-focus (headache)
-social (cramps)
-calm (fatigue)
-calm1 (sleep_issue)
-calm2 (mood_swings)
-calm3 (food_cravings)
-stress (stress)
-bloating (bloating)
-
----
-
-LATEST STATE:
+LATEST:
 {latest_text}
 
 HISTORY:
 {history_text}
 
----
-
 ЗАДАЧА:
-
-1. Daily note (1–2 предложения):
-очень короткое состояние дня + ощущение
-
-2. Phase interpretation:
-что означает текущая фаза
-
-3. Symptom dynamics:
-- какие симптомы растут / падают
-- особенно headache, stress, fatigue, mood swings
-- найти 1–2 корреляции с фазами
-
-4. Tomorrow hint:
-очень короткий прогноз на завтра
-
----
-
-СТИЛЬ:
-- очень коротко
-- как заметка в приложении
-- тёплый тон "женской покровительницы"
-- без медицины
-- без длинных объяснений
+Дай короткий прогноз и анализ.
 """
+
+        # =========================
+        # DEBUG OUTPUT (ВАЖНО)
+        # =========================
+        print("\n📦 ============== AI INPUT DEBUG ==============")
+
+        print("\n📊 RAW SNAPSHOTS COUNT:")
+        print(len(snapshots))
+
+        print("\n📊 LATEST SNAPSHOT:")
+        print(latest)
+
+        print("\n📊 HISTORY SAMPLE:")
+        for h in history[-5:]:
+            print(h)
+
+        print("\n📩 PROMPT SENT TO AI:")
+        print(prompt)
+
+        print("======================================\n")
 
         response = client.chat.completions.create(
             model="llama-3.1-8b-instant",
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a warm, precise cycle pattern and symptom dynamics analyst. You write very short daily notes."
+                    "content": "You are a warm cycle pattern analyst."
                 },
                 {
                     "role": "user",
@@ -118,11 +86,21 @@ HISTORY:
             ]
         )
 
+        # =========================
+        # DEBUG OUTPUT (RESPONSE)
+        # =========================
+        print("\n🤖 AI RESPONSE:")
+        print(response.choices[0].message.content)
+        print("======================================\n")
+
         return {
             "insight": response.choices[0].message.content
         }
 
     except Exception as e:
+        print("\n❌ ERROR:")
+        print(str(e))
+
         return {
             "error": "AI failed",
             "detail": str(e)
