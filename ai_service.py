@@ -19,55 +19,89 @@ def ai_daily_insight(data: AIRequest):
         cycle = data.cycle_data
 
         # =========================
-        # FEATURE EXTRACTION LAYER
+        # SNAPSHOTS ONLY
         # =========================
-        cycle_progress = cycle.get("cycle_progress", 0)
-        current_cycle_day = cycle.get("current_cycle_day", 0)
-        last_cycle_length = cycle.get("last_cycle_length", 0)
-        flow_length = cycle.get("flow_length", 0)
-        avg_cycle_length = cycle.get("avg_cycle_length", 0)
-        cycle_length_deviation = cycle.get("cycle_length_deviation", 0)
+        snapshots = cycle.get("snapshots", [])
+
+        if not snapshots:
+            return {
+                "insight": "Недостаточно данных для анализа."
+            }
+
+        # последний = текущий прогноз
+        latest = snapshots[-1]
+
+        # история
+        history = snapshots[:-1]
+
+        # формат истории (ограничиваем)
+        history_text = "\n".join([
+            f"{s.get('id')} | phase={s.get('phase_of_day')} | axes={s.get('axes', {})}"
+            for s in history[-20:]
+        ])
+
+        latest_text = (
+            f"id={latest.get('id')} | phase={latest.get('phase_of_day')} | axes={latest.get('axes', {})}"
+        )
 
         prompt = f"""
-You are a menstrual cycle data analyst.
+Ты — женская покровительница и аналитик состояния цикла.
 
-You receive structured cycle metrics computed in the backend.
+Ты не врач.
+Ты даёшь мягкий, тёплый, но точный daily forecast.
 
-FEATURES (pre-extracted):
-- current_cycle_day: {current_cycle_day}
-- last_cycle_length: {last_cycle_length}
-- cycle_progress: {cycle_progress}
-- flow_length: {flow_length}
-- avg_cycle_length: {avg_cycle_length}
-- cycle_length_deviation: {cycle_length_deviation}
+---
 
-RAW DATA (JSON):
-{cycle}
+ВАЖНАЯ ЛОГИКА ДАННЫХ:
 
-IMPORTANT FIELD DEFINITIONS:
-- current_cycle_day: current day in cycle starting from 1
-- last_cycle_length: previous full cycle length in days
-- cycle_progress: current_cycle_day / last_cycle_length
-  (can be > 1.0 if cycle is longer than average)
-- flow_length: current period duration
-- avg_cycle_length: average cycle length
+- LATEST SNAPSHOT = текущее состояние и прогноз на сегодня
+- SNAPSHOT HISTORY = прошлые прогнозы и динамика фаз
+- AXES = симптомы (0..1), отражают физическое и эмоциональное состояние
 
-TASK:
-Analyze ONLY the provided data. Do NOT guess missing values.
+AXES ПРИМЕР:
+focus (headache)
+social (cramps)
+calm (fatigue)
+calm1 (sleep_issue)
+calm2 (mood_swings)
+calm3 (food_cravings)
+stress (stress)
+bloating (bloating)
 
-Return:
+---
 
-1. Daily insight (1-2 sentences)
-2. Cycle status interpretation (what stage user is in based on cycle_progress)
-3. Energy level (low / medium / high)
-4. Recommendation for today (practical, non-medical)
-5. Pattern note (if cycle_progress or cycle_length_deviation looks unusual)
+LATEST STATE:
+{latest_text}
 
-RULES:
-- Be precise and data-driven
-- No medical diagnosis
-- No hallucinated data
-- Use cycle_progress as main signal for timing
+HISTORY:
+{history_text}
+
+---
+
+ЗАДАЧА:
+
+1. Daily note (1–2 предложения):
+очень короткое состояние дня + ощущение
+
+2. Phase interpretation:
+что означает текущая фаза
+
+3. Symptom dynamics:
+- какие симптомы растут / падают
+- особенно headache, stress, fatigue, mood swings
+- найти 1–2 корреляции с фазами
+
+4. Tomorrow hint:
+очень короткий прогноз на завтра
+
+---
+
+СТИЛЬ:
+- очень коротко
+- как заметка в приложении
+- тёплый тон "женской покровительницы"
+- без медицины
+- без длинных объяснений
 """
 
         response = client.chat.completions.create(
@@ -75,7 +109,7 @@ RULES:
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a precise cycle data analytics assistant."
+                    "content": "You are a warm, precise cycle pattern and symptom dynamics analyst. You write very short daily notes."
                 },
                 {
                     "role": "user",
