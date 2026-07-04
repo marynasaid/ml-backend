@@ -2,6 +2,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 from groq import Groq
 import os
+import json
 
 router = APIRouter()
 
@@ -53,28 +54,11 @@ HISTORY:
 """
 
         # =========================
-        # DEBUG OUTPUT (ВАЖНО)
+        # FULL GROQ DEBUG (NEW)
         # =========================
-        print("\n📦 ============== AI INPUT DEBUG ==============")
-
-        print("\n📊 RAW SNAPSHOTS COUNT:")
-        print(len(snapshots))
-
-        print("\n📊 LATEST SNAPSHOT:")
-        print(latest)
-
-        print("\n📊 HISTORY SAMPLE:")
-        for h in history[-5:]:
-            print(h)
-
-        print("\n📩 PROMPT SENT TO AI:")
-        print(prompt)
-
-        print("======================================\n")
-
-        response = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
-            messages=[
+        request_payload = {
+            "model": "llama-3.1-8b-instant",
+            "messages": [
                 {
                     "role": "system",
                     "content": "You are a warm cycle pattern analyst."
@@ -84,17 +68,39 @@ HISTORY:
                     "content": prompt
                 }
             ]
-        )
+        }
+
+        print("\n🚀 ============== FULL GROQ REQUEST ==============")
+        print(json.dumps(request_payload, indent=2, ensure_ascii=False))
+        print("==================================================\n")
 
         # =========================
-        # DEBUG OUTPUT (RESPONSE)
+        # OLD DEBUG INPUT
         # =========================
+        print("\n📦 ============== AI INPUT DEBUG ==============")
+        print("\n📊 RAW SNAPSHOTS COUNT:", len(snapshots))
+        print("\n📊 LATEST SNAPSHOT:", latest)
+
+        print("\n📩 PROMPT SENT TO AI:")
+        print(prompt)
+        print("======================================\n")
+
+        # =========================
+        # GROQ CALL
+        # =========================
+        response = client.chat.completions.create(**request_payload)
+
+        # =========================
+        # RESPONSE DEBUG
+        # =========================
+        ai_text = response.choices[0].message.content
+
         print("\n🤖 AI RESPONSE:")
-        print(response.choices[0].message.content)
+        print(ai_text)
         print("======================================\n")
 
         return {
-            "insight": response.choices[0].message.content
+            "insight": ai_text
         }
 
     except Exception as e:
