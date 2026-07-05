@@ -10,10 +10,9 @@ client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 
 # =========================
-# REQUEST MODEL (NEW)
+# REQUEST MODEL (OLD STYLE)
 # =========================
 class AIRequest(BaseModel):
-    instructions: str   # overview | chart_1 | chart_2
     cycle_data: dict
 
 
@@ -28,21 +27,18 @@ def log(title, data):
 
 
 # =========================
-# SYSTEM PROMPT (FIXED BEHAVIOR)
+# SYSTEM PROMPT
 # =========================
 SYSTEM_PROMPT = """
 You are a cycle intelligence engine.
 
-You MUST:
-- analyze cycle_data
-- follow instructions strictly
-- return ONLY valid JSON
-- do not add explanations or markdown
+Analyze cycle_data and return ONLY a short insight.
+No JSON, no markdown, no explanations.
 """
 
 
 # =========================
-# MAIN ENDPOINT
+# MAIN ENDPOINT (RESTORED)
 # =========================
 @router.post("/ai_daily_insight")
 def ai_daily_insight(data: AIRequest):
@@ -51,17 +47,19 @@ def ai_daily_insight(data: AIRequest):
         log("INCOMING REQUEST", data.model_dump())
 
         cycle_data = data.cycle_data
-        instructions = data.instructions
+
+        log("CYCLE DATA", cycle_data)
 
         # =========================
-        # BUILD CLEAN JSON INPUT
+        # PROMPT
         # =========================
-        ai_input = {
-            "instructions": instructions,
-            "cycle_data": cycle_data
-        }
+        prompt = f"""
+Cycle data:
+{json.dumps(cycle_data, indent=2, ensure_ascii=False)}
 
-        log("AI INPUT (FINAL)", ai_input)
+Task:
+Give a short personalized insight.
+"""
 
         # =========================
         # GROQ REQUEST
@@ -75,40 +73,22 @@ def ai_daily_insight(data: AIRequest):
                 },
                 {
                     "role": "user",
-                    "content": json.dumps(ai_input, ensure_ascii=False)
+                    "content": prompt
                 }
             ],
             "temperature": 0.3
         }
 
-        log("GROQ PAYLOAD", request_payload)
+        log("GROQ REQUEST", request_payload)
 
-        # =========================
-        # CALL GROQ
-        # =========================
         response = client.chat.completions.create(**request_payload)
 
         ai_text = response.choices[0].message.content
 
-        # =========================
-        # RAW OUTPUT LOG
-        # =========================
-        log("RAW AI RESPONSE", {"response": ai_text})
-
-        # =========================
-        # TRY PARSE JSON
-        # =========================
-        try:
-            parsed = json.loads(ai_text)
-        except:
-            parsed = {
-                "raw": ai_text,
-                "parse_error": True
-            }
+        log("AI RESPONSE", {"insight": ai_text})
 
         return {
-            "instructions": instructions,
-            "result": parsed
+            "insight": ai_text
         }
 
     except Exception as e:
