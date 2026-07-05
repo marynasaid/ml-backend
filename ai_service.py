@@ -10,7 +10,7 @@ client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 
 # =========================
-# REQUEST MODEL (OLD STYLE)
+# REQUEST MODEL
 # =========================
 class AIRequest(BaseModel):
     cycle_data: dict
@@ -38,7 +38,7 @@ No JSON, no markdown, no explanations.
 
 
 # =========================
-# MAIN ENDPOINT (RESTORED)
+# MAIN ENDPOINT
 # =========================
 @router.post("/ai_daily_insight")
 def ai_daily_insight(data: AIRequest):
@@ -51,66 +51,40 @@ def ai_daily_insight(data: AIRequest):
         log("CYCLE DATA", cycle_data)
 
         # =========================
-        # PROMPT
+        # SAFE PROMPT BUILD (NO f-string CURVY BUGS)
         # =========================
-        prompt = f"""
-Cycle data:
-{json.dumps(cycle_data, indent=2, ensure_ascii=False)}
+        cycle_data_str = json.dumps(cycle_data, indent=2, ensure_ascii=False)
 
-Task:
-You are a women's health insight engine. Your job is to generate a short, highly personalized, calm, non-diagnostic insight based on cycle model outputs.
-
-Do NOT provide medical advice or diagnosis. Do NOT assume pregnancy or disease. Focus only on probabilistic interpretation and self-awareness.
-
-Inputs:
-- current_cycle_day: integer (day of current menstrual cycle)
-- cycle_state: dictionary of probabilities (sum may be 0–1 normalized or unnormalized)
-    {
-      "menstrual": float,
-      "follicular": float,
-      "ovulation": float,
-      "luteal": float
-    }
-- stability: float (0–1), where:
-    1 = very stable cycle pattern over time
-    0 = highly irregular cycle patterns
-- next_period: integer (predicted days until next period)
-
-Rules:
-1. Identify the most likely cycle phase = argmax(cycle_state).
-2. Use secondary probabilities only if they are close (within 0.15 of max).
-3. Interpret stability:
-   - >0.75 = stable pattern
-   - 0.4–0.75 = moderately variable
-   - <0.4 = irregular pattern (use cautious language)
-4. Always include:
-   - current inferred phase
-   - one physical/mental wellbeing pattern typical for that phase (neutral tone)
-   - one personalized timing insight based on cycle_day and next_period
-5. Tone:
-   - supportive, factual, non-alarming
-   - no exaggeration, no wellness clichés
-   - no moral framing ("you should", "you must")
-
-Output format:
-Return EXACTLY this structure:
-
-Insight:
-[1–2 sentences summary of current phase inference]
-
-Body signal:
-[1 sentence about typical physiological or emotional patterns aligned with probabilities]
-
-Cycle outlook:
-[1 sentence using current_cycle_day + next_period to describe temporal position in cycle]
-
-Stability note:
-[1 sentence interpreting stability level and what it implies about predictability]
-
-Do not add extra sections.
-Keep total length under 90 words.
-  
-"""
+        prompt = (
+            "Cycle data:\n"
+            f"{cycle_data_str}\n\n"
+            "Task:\n"
+            "You are a women's health insight engine. Your job is to generate a short, highly personalized, calm, non-diagnostic insight based on cycle model outputs.\n\n"
+            "Do NOT provide medical advice or diagnosis. Do NOT assume pregnancy or disease. Focus only on probabilistic interpretation and self-awareness.\n\n"
+            "Inputs:\n"
+            "- current_cycle_day: integer (day of current menstrual cycle)\n"
+            "- cycle_state: dictionary of probabilities\n"
+            "- stability: float (0–1)\n"
+            "- next_period: integer (predicted days until next period)\n\n"
+            "Rules:\n"
+            "1. Identify the most likely cycle phase = argmax(cycle_state).\n"
+            "2. Use secondary probabilities only if close (within 0.15).\n"
+            "3. Interpret stability:\n"
+            "   - >0.75 stable\n"
+            "   - 0.4–0.75 moderate\n"
+            "   - <0.4 irregular (use cautious language)\n"
+            "4. Include:\n"
+            "   - current phase\n"
+            "   - one body/mental signal\n"
+            "   - one timing insight\n"
+            "5. Tone: supportive, factual, non-alarming\n"
+            "6. Max 90 words\n\n"
+            "Output format:\n"
+            "Insight:\n"
+            "Body signal:\n"
+            "Cycle outlook:\n"
+            "Stability note:\n"
+        )
 
         # =========================
         # GROQ REQUEST
@@ -118,14 +92,8 @@ Keep total length under 90 words.
         request_payload = {
             "model": "llama-3.1-8b-instant",
             "messages": [
-                {
-                    "role": "system",
-                    "content": SYSTEM_PROMPT
-                },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt}
             ],
             "temperature": 0.3
         }
@@ -138,9 +106,7 @@ Keep total length under 90 words.
 
         log("AI RESPONSE", {"insight": ai_text})
 
-        return {
-            "insight": ai_text
-        }
+        return {"insight": ai_text}
 
     except Exception as e:
         log("ERROR", {"error": str(e)})
