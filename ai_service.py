@@ -17,12 +17,25 @@ class AIRequest(BaseModel):
 def ai_daily_insight(data: AIRequest):
 
     try:
+        # =========================
+        # 🔥 RAW REQUEST DEBUG (ВАЖНЕЙШЕЕ)
+        # =========================
+        print("\n🔥 AI ENDPOINT HIT")
+        print("\n📦 FULL REQUEST BODY:")
+        print(data.model_dump())
+
         cycle = data.cycle_data
+
+        print("\n🔥 FLUTTER RAW INPUT (cycle_data):")
+        print(json.dumps(cycle, indent=2, ensure_ascii=False))
 
         # =========================
         # SNAPSHOTS ONLY
         # =========================
         snapshots = cycle.get("snapshots", [])
+
+        print("\n📊 SNAPSHOTS TYPE CHECK:")
+        print(type(snapshots), "COUNT:", len(snapshots))
 
         latest = snapshots[-1] if snapshots else None
         history = snapshots[:-1] if len(snapshots) > 1 else []
@@ -54,7 +67,7 @@ HISTORY:
 """
 
         # =========================
-        # FULL GROQ DEBUG (NEW)
+        # GROQ REQUEST
         # =========================
         request_payload = {
             "model": "llama-3.1-8b-instant",
@@ -70,31 +83,19 @@ HISTORY:
             ]
         }
 
-        print("\n🚀 ============== FULL GROQ REQUEST ==============")
+        print("\n🚀 GROQ REQUEST:")
         print(json.dumps(request_payload, indent=2, ensure_ascii=False))
-        print("==================================================\n")
 
         # =========================
-        # OLD DEBUG INPUT
-        # =========================
-        print("\n📦 ============== AI INPUT DEBUG ==============")
-        print("\n📊 RAW SNAPSHOTS COUNT:", len(snapshots))
-        print("\n📊 LATEST SNAPSHOT:", latest)
-
-        print("\n📩 PROMPT SENT TO AI:")
-        print(prompt)
-        print("======================================\n")
-
-        # =========================
-        # GROQ CALL
+        # CALL GROQ
         # =========================
         response = client.chat.completions.create(**request_payload)
+
+        ai_text = response.choices[0].message.content
 
         # =========================
         # RESPONSE DEBUG
         # =========================
-        ai_text = response.choices[0].message.content
-
         print("\n🤖 AI RESPONSE:")
         print(ai_text)
         print("======================================\n")
