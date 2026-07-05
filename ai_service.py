@@ -9,62 +9,59 @@ router = APIRouter()
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 
+# =========================
+# REQUEST MODEL (NEW)
+# =========================
 class AIRequest(BaseModel):
+    instructions: str   # overview | chart_1 | chart_2
     cycle_data: dict
 
 
+# =========================
+# LOG HELPER
+# =========================
+def log(title, data):
+    print("\n" + "=" * 60)
+    print(f"📌 {title}")
+    print("=" * 60)
+    print(json.dumps(data, indent=2, ensure_ascii=False))
+
+
+# =========================
+# SYSTEM PROMPT (FIXED BEHAVIOR)
+# =========================
+SYSTEM_PROMPT = """
+You are a cycle intelligence engine.
+
+You MUST:
+- analyze cycle_data
+- follow instructions strictly
+- return ONLY valid JSON
+- do not add explanations or markdown
+"""
+
+
+# =========================
+# MAIN ENDPOINT
+# =========================
 @router.post("/ai_daily_insight")
 def ai_daily_insight(data: AIRequest):
 
     try:
-        # =========================
-        # 🔥 RAW REQUEST DEBUG (ВАЖНЕЙШЕЕ)
-        # =========================
-        print("\n🔥 AI ENDPOINT HIT")
-        print("\n📦 FULL REQUEST BODY:")
-        print(data.model_dump())
+        log("INCOMING REQUEST", data.model_dump())
 
-        cycle = data.cycle_data
-
-        print("\n🔥 FLUTTER RAW INPUT (cycle_data):")
-        print(json.dumps(cycle, indent=2, ensure_ascii=False))
+        cycle_data = data.cycle_data
+        instructions = data.instructions
 
         # =========================
-        # SNAPSHOTS ONLY
+        # BUILD CLEAN JSON INPUT
         # =========================
-        snapshots = cycle.get("snapshots", [])
+        ai_input = {
+            "instructions": instructions,
+            "cycle_data": cycle_data
+        }
 
-        print("\n📊 SNAPSHOTS TYPE CHECK:")
-        print(type(snapshots), "COUNT:", len(snapshots))
-
-        latest = snapshots[-1] if snapshots else None
-        history = snapshots[:-1] if len(snapshots) > 1 else []
-
-        latest_text = (
-            f"id={latest.get('id')} | phase={latest.get('phase_of_day')} | axes={latest.get('axes', {})}"
-            if latest else "no data"
-        )
-
-        history_text = "\n".join([
-            f"{s.get('id')} | phase={s.get('phase_of_day')} | axes={s.get('axes', {})}"
-            for s in history[-20:]
-        ])
-
-        # =========================
-        # PROMPT
-        # =========================
-        prompt = f"""
-Ты — женская покровительница и мягкий аналитик состояния цикла.
-
-LATEST:
-{latest_text}
-
-HISTORY:
-{history_text}
-
-ЗАДАЧА:
-Дай короткий прогноз и анализ.
-"""
+        log("AI INPUT (FINAL)", ai_input)
 
         # =========================
         # GROQ REQUEST
@@ -74,17 +71,17 @@ HISTORY:
             "messages": [
                 {
                     "role": "system",
-                    "content": "You are a warm cycle pattern analyst."
+                    "content": SYSTEM_PROMPT
                 },
                 {
                     "role": "user",
-                    "content": prompt
+                    "content": json.dumps(ai_input, ensure_ascii=False)
                 }
-            ]
+            ],
+            "temperature": 0.3
         }
 
-        print("\n🚀 GROQ REQUEST:")
-        print(json.dumps(request_payload, indent=2, ensure_ascii=False))
+        log("GROQ PAYLOAD", request_payload)
 
         # =========================
         # CALL GROQ
@@ -94,19 +91,28 @@ HISTORY:
         ai_text = response.choices[0].message.content
 
         # =========================
-        # RESPONSE DEBUG
+        # RAW OUTPUT LOG
         # =========================
-        print("\n🤖 AI RESPONSE:")
-        print(ai_text)
-        print("======================================\n")
+        log("RAW AI RESPONSE", {"response": ai_text})
+
+        # =========================
+        # TRY PARSE JSON
+        # =========================
+        try:
+            parsed = json.loads(ai_text)
+        except:
+            parsed = {
+                "raw": ai_text,
+                "parse_error": True
+            }
 
         return {
-            "insight": ai_text
+            "instructions": instructions,
+            "result": parsed
         }
 
     except Exception as e:
-        print("\n❌ ERROR:")
-        print(str(e))
+        log("ERROR", {"error": str(e)})
 
         return {
             "error": "AI failed",
